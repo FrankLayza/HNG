@@ -1,12 +1,27 @@
 import express from "express";
+import dotenv from "dotenv"
 import cors from "cors";
 import type { APIResponse } from "./config.js";
 import { classifyName } from "./config.js";
+import rateLimit from "express-rate-limit"
 
+const appLimiter = rateLimit({
+  windowMs: 1000 * 60 * 10,
+  limit: 50
+})
+
+const corsOption = {
+  origin: "*",
+  optionsSuccessStatus: 200
+}
+
+dotenv.config()
 const app = express();
-const PORT = 2000;
-app.use(cors());
+app.use(cors(corsOption));
 app.use(express.json());
+app.use(appLimiter)
+
+
 
 app.get("/api/classify", async (req, res) => {
   const name = req.query.name;
@@ -14,24 +29,24 @@ app.get("/api/classify", async (req, res) => {
   if (typeof name !== "string") {
     return res.status(422).json({
       status: "error",
-      message: "Name must be string",
+      message: "name is not a string",
     });
   }
 
   const result: APIResponse = await classifyName(name);
   if (result.status === "error") {
     const statusCode =
-      result.message === "Name is required"
+      result.message === "Missing or empty name parameter"
         ? 400
-        : result.message.includes("No prediction")
-          ? 200
-          : 500;
+        : result.message === "Upstream or server failure"
+          ? 500
+          : 200;
 
     return res.status(statusCode).json(result);
   }
   return res.status(200).json(result);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server started at ${PORT} `);
+app.listen(process.env.PORT, () => {
+  console.log(`Server started at ${process.env.PORT} `);
 });

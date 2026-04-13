@@ -41,7 +41,7 @@ export async function classifyName(
     if (!data.gender || data.count === 0) {
       return {
         status: "error",
-        message: "No information for this name",
+        message: "No prediction available for the provided name",
       };
     }
 
