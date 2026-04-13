@@ -1,19 +1,22 @@
-
 export interface SuccessResponse {
   status: "success";
   data: GenderData;
 }
+
 export interface ErrorResponse {
   status: "error";
   message: string;
 }
+
 export interface GenderData {
   name: string;
   gender: "male" | "female" | null;
   probability: number;
   sample_size: number;
   is_confident: boolean;
+  processed_at: string;
 }
+
 export interface GenderizeApiRes {
   name: string;
   gender: "male" | "female" | null;
@@ -23,21 +26,27 @@ export interface GenderizeApiRes {
 
 export type APIResponse = SuccessResponse | ErrorResponse;
 
-export async function classifyName(
-  name: string,
-): Promise<APIResponse> {
-  if (!name.trim()) {
-    return {
-      status: "error",
-      message: "Name is required",
-    };
-  }
+// Strip milliseconds from ISO string: 2026-04-13T10:00:00.000Z → 2026-04-13T10:00:00Z
+function getProcessedAt(): string {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
 
+export async function classifyName(name: string): Promise<APIResponse> {
   try {
     const apiRes = await fetch(
-      `https://api.genderize.io/?name=${encodeURIComponent(name)}`,
+      `https://api.genderize.io/?name=${encodeURIComponent(name)}`
     );
+
+    if (!apiRes.ok) {
+      return {
+        status: "error",
+        message: "Upstream or server failure",
+      };
+    }
+
     const data: GenderizeApiRes = await apiRes.json();
+
+    // Edge case — Genderize returns null gender or zero count
     if (!data.gender || data.count === 0) {
       return {
         status: "error",
@@ -45,22 +54,21 @@ export async function classifyName(
       };
     }
 
-    const newData = {
-      name: data.name,
-      gender: data.gender,
-      probability: data.probability,
-      sample_size: data.count,
-      is_confident: data.probability >= 0.7 && data.count >= 100,
-      processed_at: new Date().toISOString(),
-    };
     return {
       status: "success",
-      data: newData,
+      data: {
+        name: data.name,
+        gender: data.gender,
+        probability: data.probability,
+        sample_size: data.count,
+        is_confident: data.probability >= 0.7 && data.count >= 100,
+        processed_at: getProcessedAt(),
+      },
     };
-  } catch (error) {
+  } catch {
     return {
       status: "error",
-      message: "Failed to fetch prediction",
+      message: "Upstream or server failure",
     };
   }
 }
