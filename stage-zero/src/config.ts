@@ -26,7 +26,6 @@ export interface GenderizeApiRes {
 
 export type APIResponse = SuccessResponse | ErrorResponse;
 
-// Strip milliseconds from ISO string: 2026-04-13T10:00:00.000Z → 2026-04-13T10:00:00Z
 function getProcessedAt(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
@@ -45,8 +44,6 @@ export async function classifyName(name: string): Promise<APIResponse> {
     }
 
     const data: GenderizeApiRes = await apiRes.json();
-
-    // Edge case — Genderize returns null gender or zero count
     if (!data.gender || data.count === 0) {
       return {
         status: "error",
