@@ -17,6 +17,7 @@ const corsOption = {
 };
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(cors(corsOption));
 app.use(express.json());
 app.use(appLimiter);
