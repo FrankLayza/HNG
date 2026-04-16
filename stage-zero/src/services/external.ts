@@ -10,7 +10,7 @@ export interface ErrorResponse {
 
 export interface GenderData {
   name: string;
-  gender: "male" | "female" | null;
+  gender: "male" | "female" ;
   probability: number;
   sample_size: number;
   is_confident: boolean;
@@ -117,22 +117,32 @@ export async function classifyName(name: string): Promise<APIResponse> {
     };
   }
 }
-export async function getAllProfile(
-  name: string,
-): Promise<[AgeData, NationalityData, APIResponse]> {
-  try {
-    const [ageRes, countryRes, genderRes] = await Promise.all([
-      getAgeData(name),
-      getNationality(name),
-      classifyName(name)
-    ]);
 
-    if(!ageRes.age){throw new Error}
-    if(!countryRes.country){throw new Error}
-    if(genderRes.status === "error"){throw new Error}
-    return [ageRes, countryRes, genderRes];
+export async function getGender(name: string): Promise<GenderData> {
+  try {
+    const apiRes = await fetch(
+      `https://api.genderize.io/?name=${encodeURIComponent(name)}`,
+    );
+    if (!apiRes.ok) {
+      throw new Error();
+    }
+    const data = await apiRes.json();
+    if (!data.gender || data.count === 0) {
+      throw new Error();
+    }
+    return data;
   } catch (error) {
     throw new Error();
   }
 }
- 
+
+export async function getAllProfile(
+  name: string,
+): Promise<[AgeData, NationalityData, GenderData]> {
+  const [ageRes, countryRes, genderRes] = await Promise.all([
+    getAgeData(name),
+    getNationality(name),
+    getGender(name),
+  ]);
+  return [ageRes, countryRes, genderRes];
+}
