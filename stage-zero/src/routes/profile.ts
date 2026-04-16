@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { v7 as uuidv7 } from "uuid";
 import { getAllProfile } from "../services/external.js";
 import { getAgeGroup, getTopCountry } from "../services/classify.js";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../generated/prisma/client.js";
 
 import { ExpectedProfileResponse } from "../types.js";
 
