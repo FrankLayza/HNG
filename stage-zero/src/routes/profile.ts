@@ -6,8 +6,9 @@ import { getAllProfile } from "../services/external.js";
 import { getAgeGroup, getTopCountry } from "../services/classify.js";
 import { Prisma } from "@prisma/client";
 
-const route: Router = Router();
+import { ExpectedProfileResponse } from "../types.js";
 
+const route: Router = Router();
 route.post("/api/profiles", async (req, res) => {
   if (req.body.name === undefined || req.body.name === "") {
     return res.status(400).json({
@@ -130,7 +131,7 @@ route.get("/api/profiles", async (req, res) => {
     return res.status(200).json({
       status: "success",
       count: profiles.length,
-      data: profiles.map((profile) => {
+      data: profiles.map((profile: ExpectedProfileResponse) => {
         return {
           id: profile.id,
           name: profile.name,
