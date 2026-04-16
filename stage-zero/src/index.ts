@@ -1,11 +1,10 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 // import type { APIResponse } from "./config.js";
 // import { classifyName } from "./config.js";
 import rateLimit from "express-rate-limit";
 import profileRoute from "./routes/profile.js";
-dotenv.config();
 
 const appLimiter = rateLimit({
   windowMs: 1000 * 60 * 10,

@@ -130,7 +130,14 @@ export async function getGender(name: string): Promise<GenderData> {
     if (!data.gender || data.count === 0) {
       throw new Error("Genderize returned an invalid response");
     }
-    return data;
+    return {
+      name: data.name,
+      gender: data.gender,
+      probability: data.probability,
+      sample_size: data.count,
+      is_confident: data.probability >= 0.7 && data.count >= 100,
+      processed_at: getProcessedAt(),
+    };
   } catch (error) {
     throw new Error("Genderize returned an invalid response");
   }

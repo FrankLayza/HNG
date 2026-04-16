@@ -18,7 +18,7 @@ route.post("/api/profiles", async (req, res) => {
   if (typeof req.body.name !== "string") {
     return res.status(422).json({
       status: "error",
-      message: "name is not a string",
+      message: "Invalid type",
     });
   }
 
@@ -76,6 +76,11 @@ route.post("/api/profiles", async (req, res) => {
         message: error.message,
       });
     }
+    console.error("POST /api/profiles error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
   }
 });
 
@@ -98,6 +103,7 @@ route.get("/api/profiles/:id", async (req, res) => {
       data: profile,
     });
   } catch (error) {
+    console.error("GET /api/profiles/:id error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -136,6 +142,7 @@ route.get("/api/profiles", async (req, res) => {
       }),
     });
   } catch (error) {
+    console.error("GET /api/profiles error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
