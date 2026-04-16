@@ -49,15 +49,15 @@ export async function getAgeData(name: string): Promise<AgeData> {
       `https://api.agify.io?name=${encodeURIComponent(name)}`,
     );
     if (!apiRes.ok) {
-      throw new Error();
+      throw new Error("Agify returned an invalid response");
     }
     const data = await apiRes.json();
     if (!data?.age) {
-      throw new Error();
+      throw new Error("Agify returned an invalid response");
     }
     return data;
   } catch (error) {
-    throw new Error();
+    throw new Error("Agify returned an invalid response");
   }
 }
 export async function getNationality(name: string): Promise<NationalityData> {
@@ -66,15 +66,15 @@ export async function getNationality(name: string): Promise<NationalityData> {
       `https://api.nationalize.io?name=${encodeURIComponent(name)}`,
     );
     if (!apiRes.ok) {
-      throw new Error();
+      throw new Error("Nationalize returned an invalid response");
     }
     const data = await apiRes.json();
     if (!data.country) {
-      throw new Error();
+      throw new Error("Nationalize returned an invalid response");
     }
     return data;
   } catch (error) {
-    throw new Error();
+    throw new Error("Nationalize returned an invalid response");
   }
 }
 
@@ -124,15 +124,15 @@ export async function getGender(name: string): Promise<GenderData> {
       `https://api.genderize.io/?name=${encodeURIComponent(name)}`,
     );
     if (!apiRes.ok) {
-      throw new Error();
+      throw new Error("Genderize returned an invalid response");
     }
     const data = await apiRes.json();
     if (!data.gender || data.count === 0) {
-      throw new Error();
+      throw new Error("Genderize returned an invalid response");
     }
     return data;
   } catch (error) {
-    throw new Error();
+    throw new Error("Genderize returned an invalid response");
   }
 }
 
