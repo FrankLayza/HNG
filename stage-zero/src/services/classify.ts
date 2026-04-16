@@ -1,4 +1,4 @@
-import { Country } from "../services/external.js";
+import { Country } from "../types.js";
 export function getAgeGroup(age: number): string {
   if (age >= 0 && age <= 12) {
     return "child";
