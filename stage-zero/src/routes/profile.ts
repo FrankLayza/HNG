@@ -77,7 +77,6 @@ route.post("/api/profiles", async (req, res) => {
         name: validatedData.name,
         gender: genderRes.gender,
         gender_probability: genderRes.probability,
-        sample_size: genderRes.sample_size,
         age: ageRes.age,
         age_group: ageGroup,
         country_id: country.country_id,
@@ -105,6 +104,34 @@ route.post("/api/profiles", async (req, res) => {
       status: "error",
       message: "Internal server error",
     });
+  }
+});
+
+route.get("/api/profiles/search", async (req, res) => {
+  const query = req.query.q;
+  if (!query || typeof query !== "string") {
+    return res.status(400).json({ status: "error", message: "Invalid query parameters" });
+  }
+
+  const parsedFilters = parseNLQ(query);
+  if (!parsedFilters) {
+    return res.status(400).json({ status: "error", message: "Unable to interpret query" });
+  }
+
+  // Combine pagination defaults with our parsed NLQ filters
+  const mergedQuery = { ...req.query, ...parsedFilters };
+  
+  const parsed = querySchema.safeParse(mergedQuery);
+  if (!parsed.success) {
+    return res.status(400).json({ status: "error", message: "Invalid query parameters" });
+  }
+
+  try {
+    const result = await executeProfileSearch(parsed.data);
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("GET /api/profiles/search error:", error);
+    return res.status(500).json({ status: "error", message: "Internal server error" });
   }
 });
 
@@ -157,7 +184,7 @@ async function executeProfileSearch(data: z.infer<typeof querySchema>) {
 
   const skip = (data.page - 1) * data.limit;
 
-  const [total, profiles] = await prisma.$transaction([
+  const [total, profiles] = await Promise.all([
     prisma.profile.count({ where }),
     prisma.profile.findMany({
       where,
@@ -177,6 +204,7 @@ async function executeProfileSearch(data: z.infer<typeof querySchema>) {
     data: profiles,
   };
 }
+
 route.get("/api/profiles", async (req, res) => {
   const parsed = querySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -195,34 +223,6 @@ route.get("/api/profiles", async (req, res) => {
       status: "error",
       message: "Internal server error",
     });
-  }
-});
-
-route.get("/api/profiles/search", async (req, res) => {
-  const query = req.query.q;
-  if (!query || typeof query !== "string") {
-    return res.status(400).json({ status: "error", message: "Invalid query parameters" });
-  }
-
-  const parsedFilters = parseNLQ(query);
-  if (!parsedFilters) {
-    return res.status(400).json({ status: "error", message: "Unable to interpret query" });
-  }
-
-  // Combine pagination defaults with our parsed NLQ filters
-  const mergedQuery = { ...req.query, ...parsedFilters };
-  
-  const parsed = querySchema.safeParse(mergedQuery);
-  if (!parsed.success) {
-    return res.status(400).json({ status: "error", message: "Invalid query parameters" });
-  }
-
-  try {
-    const result = await executeProfileSearch(parsed.data);
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error("GET /api/profiles/search error:", error);
-    return res.status(500).json({ status: "error", message: "Internal server error" });
   }
 });
 

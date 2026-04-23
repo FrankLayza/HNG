@@ -17,7 +17,6 @@ model Profile{
   name String @unique
   gender String
   gender_probability Float
-  sample_size Int
   age Int
   age_group String
   country_name String
