@@ -48,3 +48,13 @@ export interface ExpectedProfileResponse {
   age_group: string;
   country_id: string;
 }
+export interface Profile {
+  name: string;
+  gender: string;
+  gender_probability: number;
+  age: number;
+  age_group: string;
+  country_id: string;
+  country_name: string;
+  country_probability: number;
+}
