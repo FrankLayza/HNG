@@ -37,6 +37,7 @@ model User {
   name          String?
   role          Role           @default(ANALYST)
   refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -48,5 +49,19 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // e.g. "LOGIN", "LIST_PROFILES", "DELETE_PROFILE", "EXPORT_CSV"
+  resource  String?  // e.g. "/api/v1/profiles", "/api/v1/profiles/:id"
+  method    String   // HTTP method: GET, POST, DELETE
+  statusCode Int?    // Response status code
+  ipAddress String?
+  userAgent String?
+  details   String?  // Optional extra context
   createdAt DateTime @default(now())
 }

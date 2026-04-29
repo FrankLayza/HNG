@@ -5,6 +5,8 @@ import rateLimit from "express-rate-limit";
 import morgan from "morgan";
 import profileRoute from "./routes/profile.js";
 import authRoute from "./routes/auth.js";
+import adminRoute from "./routes/admin.js";
+import { auditLogger } from "./middleware/audit.js";
 
 // Rate limiting configuration
 const appLimiter = rateLimit({
@@ -33,7 +35,8 @@ app.use(appLimiter);
 // Routes
 // We use /api/v1 prefix as required by Stage 3
 app.use("/api/v1/auth", authRoute);
-app.use("/api/v1/profiles", profileRoute);
+app.use("/api/v1/profiles", auditLogger, profileRoute);
+app.use("/api/v1/admin", auditLogger, adminRoute);
 
 // Health check endpoint
 app.get("/health", (req, res) => {

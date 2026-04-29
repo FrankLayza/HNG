@@ -1,73 +1,94 @@
 # Insighta Labs+ Backend (Stage 3)
 
-Secure Access & Multi-Interface Integration for the Profile Intelligence System.
+The core API engine for the **Insighta Labs+** intelligence platform. This repository provides a secure, role-based REST API that powers both the Web Portal and the globally installable CLI tool.
 
 ## System Architecture
 
-The Insighta Labs+ ecosystem consists of:
-1.  **Backend (This repo)**: Node.js/Express API with Prisma ORM and PostgreSQL.
-2.  **Web Portal**: Next.js application (separate repo).
-3.  **CLI Tool**: Globally installable Node.js command-line tool (separate repo).
+The Insighta Labs+ ecosystem follows a **Three-Interface/One-Backend** pattern:
 
-Everything communicates via the `v1` REST API, secured with JWTs and GitHub OAuth.
+1.  **Backend (This repo)**: A high-performance Express.js API using Prisma ORM and PostgreSQL.
+2.  **Web Portal**: A Next.js 16 dashboard using HTTP-only cookies for session management.
+3.  **CLI Tool**: A globally installable command-line interface that stores credentials at `~/.insighta/credentials.json`.
+
+### Core Layers:
+-   **Security Layer**: GitHub OAuth with PKCE (S256), JWT access/refresh token rotation, and CSRF protection.
+-   **Intelligence Layer**: Natural Language Query (NLQ) parsing for profile analysis.
+-   **Observability Layer**: Automated request logging and audit trails for all administrative actions.
+-   **Guard Layer**: Rate limiting (1000 req/15min) and Role-Based Access Control (RBAC).
 
 ## Authentication Flow (GitHub OAuth + PKCE)
 
-We implement a secure OAuth flow that supports both browser-based and headless/CLI environments:
+The backend implements the **Proof Key for Code Exchange (PKCE)** flow to secure both browser and CLI logins:
 
-1.  **Authorization**: The client (CLI or Web) generates a PKCE `code_verifier` and `code_challenge`. It redirects the user to `/api/v1/auth/github/url`.
-2.  **Callback**: GitHub redirects back with a `code`. The client sends this `code` along with the `code_verifier` to `POST /api/v1/auth/github/callback`.
-3.  **Token Exchange**: The backend exchanges the code/verifier with GitHub, fetches the user's identity, and creates/updates a local `User` record.
-4.  **Session Issuance**: The backend issues a short-lived **Access Token** (15m) and a long-lived **Refresh Token** (7d).
+1.  **Authorization Request**: The client (Web or CLI) generates a random `code_verifier` and a `code_challenge` (SHA256). It redirects the user to `/api/v1/auth/github/url`.
+2.  **GitHub Login**: User authenticates with GitHub. GitHub redirects to the client's callback URI with an authorization `code`.
+3.  **Token Exchange**: The client sends the `code` and the original `code_verifier` to `POST /api/v1/auth/github/callback`.
+4.  **Verification**: The backend verifies the verifier against the challenge. If valid, it fetches the GitHub user identity.
+5.  **Session Creation**: The backend creates a local User, generates a short-lived **Access Token** (15m), and a long-lived **Refresh Token** (7d).
 
 ## Token Handling Approach
 
--   **Access Tokens**: Short expiry (15m). Carries `userId` and `role`. Must be sent in the `Authorization: Bearer <token>` header.
--   **Refresh Tokens**: Long expiry (7d). Stored in the database and used to rotate credentials.
--   **Rotation**: When a refresh token is used, it is revoked, and a new refresh token/access token pair is issued.
+-   **Access Tokens**: Stateless JWTs containing `userId` and `role`. Verified on every request via the `Authorization: Bearer` header.
+-   **Refresh Tokens**: Stored in the database. Used to obtain new access tokens when they expire.
+-   **Rotation & Revocation**: Every refresh request rotates the refresh token (the old one is revoked and a new one issued). This prevents replay attacks. Admins can revoke all active sessions for a user globally.
 
 ## Role Enforcement Logic
 
-We use a Role-Based Access Control (RBAC) middleware:
--   **ANALYST**: Can search, filter, and view profiles.
--   **ADMIN**: Inherits Analyst permissions plus **Delete** and **CSV Export** capabilities.
--   **First User Rule**: The first user to log in via GitHub is automatically granted the `ADMIN` role. Subsequent users are `ANALYST` by default.
+RBAC is enforced via middleware at the route level:
 
-## Natural Language Parsing (NLQ)
+-   **ANALYST**: Default role. Can create profiles, list profiles, and use Natural Language Search.
+-   **ADMIN**: High-privilege role. Inherits all Analyst permissions plus:
+    -   Deleting profiles.
+    -   Exporting full profile datasets as CSV.
+    -   Managing system users and roles.
+    -   Revoking active sessions.
+    -   Viewing system-wide Audit Logs.
 
-The system retains its Stage 2 "Intelligence":
--   Parses queries like "men from Nigeria above 30" or "young women in US".
--   Extracts gender, age ranges, age groups, and country codes using regex and the `i18n-iso-countries` library.
--   The parsed tokens are seamlessly merged with standard pagination and filtering parameters.
+*Note: The first user to register in the system is automatically granted the `ADMIN` role.*
 
-## API Usage
+## Natural Language Parsing (NLQ) Approach
 
-### Auth Endpoints
--   `GET /api/v1/auth/github/url`: Get GitHub auth URL.
--   `POST /api/v1/auth/github/callback`: Finalize login (send `code` and `code_verifier`).
--   `POST /api/v1/auth/refresh`: Get new tokens (send `refresh_token`).
+The `parseNLQ` engine uses a sophisticated regex-based tokenizer to transform human intent into database filters:
+1.  **Token Extraction**: Identifies gender keywords ("men", "female"), age numbers ("over 30", "25"), and locations ("Lagos", "Nigeria").
+2.  **Entity Mapping**: Maps country names to ISO codes using `i18n-iso-countries`.
+3.  **Range Conversion**: Converts phrases like "in their 20s" into explicit age ranges (`min_age=20`, `max_age=29`).
+4.  **Query Synthesis**: The result is merged with the Prisma query builder to execute a single, optimized SQL query.
 
-### Profile Endpoints
--   `GET /api/v1/profiles`: List profiles (Requires Analyst+).
--   `GET /api/v1/profiles/search?q=...`: Natural language search (Requires Analyst+).
--   `GET /api/v1/profiles/:id`: Get profile details (Requires Analyst+).
--   `POST /api/v1/profiles`: Create profile (Requires Analyst+).
--   `DELETE /api/v1/profiles/:id`: Delete profile (Requires Admin).
--   `GET /api/v1/profiles/export`: Export as CSV (Requires Admin).
+## CLI Interaction
 
-## Setup
+The CLI tool interacts with the backend using a local callback server:
+-   **Login**: The CLI starts a server on `http://localhost:9876`. After GitHub login, the backend redirects to this local port.
+-   **Credential Storage**: Tokens are stored locally at `~/.insighta/credentials.json`.
+-   **Auto-Refresh**: The CLI automatically detects expired access tokens and calls `/api/v1/auth/refresh` before retrying failed requests.
 
-1.  Clone the repo and run `pnpm install`.
-2.  Set up your `.env`:
-    ```env
-    DATABASE_URL="postgresql://..."
-    GITHUB_CLIENT_ID="your_id"
-    GITHUB_CLIENT_SECRET="your_secret"
-    GITHUB_REDIRECT_URI="http://localhost:3000/callback"
-    JWT_SECRET="your_jwt_secret"
-    JWT_REFRESH_SECRET="your_refresh_secret"
-    PORT=3000
-    ```
-3.  Generate Prisma client: `pnpm prisma generate`.
-4.  Run migrations: `pnpm prisma db push`.
-5.  Start server: `pnpm dev`.
+---
+
+## API Reference
+
+### Authentication
+-   `GET /api/v1/auth/github/url`: Get auth URL with redirect_uri support.
+-   `POST /api/v1/auth/github/callback`: Exchange code+verifier for tokens.
+-   `POST /api/v1/auth/refresh`: Rotate refresh token and get new access token.
+
+### Profiles (Analyst+)
+-   `GET /api/v1/profiles`: List profiles with standard filters/pagination.
+-   `GET /api/v1/profiles/search?q=...`: Natural language profile search.
+-   `POST /api/v1/profiles`: Analyze name and create intelligence profile.
+-   `DELETE /api/v1/profiles/:id`: (Admin Only) Purge a profile.
+-   `GET /api/v1/profiles/export`: (Admin Only) Download full CSV export.
+
+### Administration (Admin Only)
+-   `GET /api/v1/admin/users`: List all users and their roles.
+-   `PATCH /api/v1/admin/users/:id/role`: Update user role (ADMIN/ANALYST).
+-   `GET /api/v1/admin/sessions`: List all active system sessions.
+-   `DELETE /api/v1/admin/sessions/:id`: Revoke a specific session.
+-   `GET /api/v1/admin/audit-logs`: View paginated system-wide audit trails.
+
+---
+
+## Setup & Deployment
+
+1.  **Install**: `pnpm install`
+2.  **Database**: `npx prisma db push` (Synchronizes schema without reset)
+3.  **Environment**: Create `.env` based on `.env.example`.
+4.  **Dev**: `pnpm dev`
