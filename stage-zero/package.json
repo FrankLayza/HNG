@@ -24,6 +24,9 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
     "i18n-iso-countries": "^7.14.0",
+    "fast-csv": "^5.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
     "pg": "^8.20.0",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"
@@ -36,6 +39,8 @@
     "prisma": "^7.7.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/morgan": "^1.9.9"
   }
 }

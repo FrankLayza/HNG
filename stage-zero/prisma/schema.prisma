@@ -11,16 +11,57 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
- 
-model Profile{
-  id  String @id
-  name String @unique
-  gender String
-  gender_probability Float
-  age Int
-  age_group String
-  country_name String
-  country_id String
+
+model Profile {
+  id                  String   @id
+  name                String   @unique
+  gender              String
+  gender_probability  Float
+  age                 Int
+  age_group           String
+  country_name        String
+  country_id          String
   country_probability Float
-  created_at  DateTime @default(now())
+  created_at          DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  ANALYST
+}
+
+model User {
+  id            String         @id @default(uuid())
+  githubId      String         @unique
+  email         String?        @unique
+  name          String?
+  role          Role           @default(ANALYST)
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // e.g. "LOGIN", "LIST_PROFILES", "DELETE_PROFILE", "EXPORT_CSV"
+  resource  String?  // e.g. "/api/v1/profiles", "/api/v1/profiles/:id"
+  method    String   // HTTP method: GET, POST, DELETE
+  statusCode Int?    // Response status code
+  ipAddress String?
+  userAgent String?
+  details   String?  // Optional extra context
+  createdAt DateTime @default(now())
 }

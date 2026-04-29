@@ -1,91 +1,94 @@
-# HNG Stage 2 - Intelligence Query Engine
+# Insighta Labs+ Backend (Stage 3)
 
-A backend demographic intelligence engine built with Express.js, TypeScript, and Prisma. This project upgrades the base profile ingestion system with advanced filtering, sorting, pagination, and a custom Natural Language Query (NLQ) search endpoint.
+The core API engine for the **Insighta Labs+** intelligence platform. This repository provides a secure, role-based REST API that powers both the Web Portal and the globally installable CLI tool.
 
-## Features
-- **Advanced Filtering**: Combine numerical ranges (`min_age`, `max_age`) with categorical filters (`gender`, `age_group`, `country_id`).
-- **Concurrent Pagination**: Uses Prisma `$transaction` to efficiently return requested data slices alongside total dataset counts.
-- **Natural Language Parsing**: A custom, rule-based text engine that maps plain English queries into strict database filters.
-- **Data Seeding**: Automated insertion of 2,026 base profiles utilizing robust idempotent insertions and chronologically ordered UUID v7s.
+## System Architecture
+
+The Insighta Labs+ ecosystem follows a **Three-Interface/One-Backend** pattern:
+
+1.  **Backend (This repo)**: A high-performance Express.js API using Prisma ORM and PostgreSQL.
+2.  **Web Portal**: A Next.js 16 dashboard using HTTP-only cookies for session management.
+3.  **CLI Tool**: A globally installable command-line interface that stores credentials at `~/.insighta/credentials.json`.
+
+### Core Layers:
+-   **Security Layer**: GitHub OAuth with PKCE (S256), JWT access/refresh token rotation, and CSRF protection.
+-   **Intelligence Layer**: Natural Language Query (NLQ) parsing for profile analysis.
+-   **Observability Layer**: Automated request logging and audit trails for all administrative actions.
+-   **Guard Layer**: Rate limiting (1000 req/15min) and Role-Based Access Control (RBAC).
+
+## Authentication Flow (GitHub OAuth + PKCE)
+
+The backend implements the **Proof Key for Code Exchange (PKCE)** flow to secure both browser and CLI logins:
+
+1.  **Authorization Request**: The client (Web or CLI) generates a random `code_verifier` and a `code_challenge` (SHA256). It redirects the user to `/api/v1/auth/github/url`.
+2.  **GitHub Login**: User authenticates with GitHub. GitHub redirects to the client's callback URI with an authorization `code`.
+3.  **Token Exchange**: The client sends the `code` and the original `code_verifier` to `POST /api/v1/auth/github/callback`.
+4.  **Verification**: The backend verifies the verifier against the challenge. If valid, it fetches the GitHub user identity.
+5.  **Session Creation**: The backend creates a local User, generates a short-lived **Access Token** (15m), and a long-lived **Refresh Token** (7d).
+
+## Token Handling Approach
+
+-   **Access Tokens**: Stateless JWTs containing `userId` and `role`. Verified on every request via the `Authorization: Bearer` header.
+-   **Refresh Tokens**: Stored in the database. Used to obtain new access tokens when they expire.
+-   **Rotation & Revocation**: Every refresh request rotates the refresh token (the old one is revoked and a new one issued). This prevents replay attacks. Admins can revoke all active sessions for a user globally.
+
+## Role Enforcement Logic
+
+RBAC is enforced via middleware at the route level:
+
+-   **ANALYST**: Default role. Can create profiles, list profiles, and use Natural Language Search.
+-   **ADMIN**: High-privilege role. Inherits all Analyst permissions plus:
+    -   Deleting profiles.
+    -   Exporting full profile datasets as CSV.
+    -   Managing system users and roles.
+    -   Revoking active sessions.
+    -   Viewing system-wide Audit Logs.
+
+*Note: The first user to register in the system is automatically granted the `ADMIN` role.*
+
+## Natural Language Parsing (NLQ) Approach
+
+The `parseNLQ` engine uses a sophisticated regex-based tokenizer to transform human intent into database filters:
+1.  **Token Extraction**: Identifies gender keywords ("men", "female"), age numbers ("over 30", "25"), and locations ("Lagos", "Nigeria").
+2.  **Entity Mapping**: Maps country names to ISO codes using `i18n-iso-countries`.
+3.  **Range Conversion**: Converts phrases like "in their 20s" into explicit age ranges (`min_age=20`, `max_age=29`).
+4.  **Query Synthesis**: The result is merged with the Prisma query builder to execute a single, optimized SQL query.
+
+## CLI Interaction
+
+The CLI tool interacts with the backend using a local callback server:
+-   **Login**: The CLI starts a server on `http://localhost:9876`. After GitHub login, the backend redirects to this local port.
+-   **Credential Storage**: Tokens are stored locally at `~/.insighta/credentials.json`.
+-   **Auto-Refresh**: The CLI automatically detects expired access tokens and calls `/api/v1/auth/refresh` before retrying failed requests.
 
 ---
 
-## 🧠 Natural Language Search (Core Feature)
-**Endpoint**: `GET /api/profiles/search?q={query}`
+## API Reference
 
-### Parsing Approach & Supported Keywords
-The NLQ Engine uses **Rule-Based Token Extraction** via Regular Expressions (Regex) and Dictionary Lookup, strictly avoiding external LLM/AI services.
+### Authentication
+-   `GET /api/v1/auth/github/url`: Get auth URL with redirect_uri support.
+-   `POST /api/v1/auth/github/callback`: Exchange code+verifier for tokens.
+-   `POST /api/v1/auth/refresh`: Rotate refresh token and get new access token.
 
-1. **Age Modifiers**:
-   - `above {N}`, `over {N}`, `> {N}` -> Maps to `min_age = N`
-   - `below {N}`, `under {N}`, `< {N}` -> Maps to `max_age = N`
-   - `young` -> Specifically maps to `min_age = 16, max_age = 24`
+### Profiles (Analyst+)
+-   `GET /api/v1/profiles`: List profiles with standard filters/pagination.
+-   `GET /api/v1/profiles/search?q=...`: Natural language profile search.
+-   `POST /api/v1/profiles`: Analyze name and create intelligence profile.
+-   `DELETE /api/v1/profiles/:id`: (Admin Only) Purge a profile.
+-   `GET /api/v1/profiles/export`: (Admin Only) Download full CSV export.
 
-2. **Gender Identifiers**:
-   - `female`, `females`, `woman`, `women`, `girl`, `girls` -> Maps to `gender = "female"`
-   - `male`, `males`, `man`, `men`, `boy`, `boys` -> Maps to `gender = "male"`
-   - *Conflict Resolution*: If both genders are detected (e.g. "male and female teenagers"), the engine intentionally **omits** the gender filter to return both datasets.
-
-3. **Age Groups**:
-   - Explicit keyword matching for: `child/children`, `teenager/teens`, `adult/adults`, `senior/seniors`.
-
-4. **Geographic (Country) Mapping**:
-   - The parser utilizes the `i18n-iso-countries` package to pull an extensive dictionary of all global country names.
-   - It iterates through these names (sorted longest-first to prevent partial matching overlaps) and tests for word-boundary matches in the user's string.
-   - E.g. `"males in South Africa"` securely maps to `country_id = "ZA"`.
-
-### Parser Limitations & Edge Cases
-Because the parser is strictly rule-based, it carries the following intentional limitations:
-1. **No Typo Tolerance**: The regex boundary matches are exact. Searching for `"femlaes in Nigeria"` will fail to extract the gender token.
-2. **Adjacency Ignorance**: The parser does not comprehend spatial geography. Searching `"people near France"` will not return neighboring countries; it will only look for explicit string matches for "France".
-3. **Compound Boolean Logic**: The engine extracts tokens universally across the string. It cannot handle mutually exclusive OR grouping. For example, `"males from Kenya or females from Nigeria"` will merge all tokens, resulting in a conflicting query rather than two distinct geographic branches.
-4. **Keyword Shadowing**: If a user searches for a person whose actual name is a reserved keyword (e.g., searching for "Young from Nigeria"), the parser will mistakenly map "young" to the age filter (16-24) instead of conducting a name search.
+### Administration (Admin Only)
+-   `GET /api/v1/admin/users`: List all users and their roles.
+-   `PATCH /api/v1/admin/users/:id/role`: Update user role (ADMIN/ANALYST).
+-   `GET /api/v1/admin/sessions`: List all active system sessions.
+-   `DELETE /api/v1/admin/sessions/:id`: Revoke a specific session.
+-   `GET /api/v1/admin/audit-logs`: View paginated system-wide audit trails.
 
 ---
 
-## 📚 API Endpoints
+## Setup & Deployment
 
-### 1. Get All Profiles
-**GET** `/api/profiles`
-Supports dynamic filtering, sorting, and pagination. All queries are combined utilizing `AND` logic.
-
-**Query Parameters:**
-- `page` (default: 1)
-- `limit` (default: 10, max: 50)
-- `gender` (male, female)
-- `age_group` (child, teenager, adult, senior)
-- `country_id` (ISO Code, e.g. NG)
-- `min_age` / `max_age` (Numerical integers)
-- `min_gender_probability` / `min_country_probability` (Floats)
-- `sort_by` (age, created_at, gender_probability)
-- `order` (asc, desc)
-
-**Success Response (200)**:
-```json
-{
-  "status": "success",
-  "page": 1,
-  "limit": 10,
-  "total": 2026,
-  "data": [
-     {
-       "id": "b3f9c1e2-7d4a-4c91-9c2a-1f0a8e5b6d12",
-       "name": "emmanuel",
-       "gender": "male",
-       "gender_probability": 0.99,
-       "age": 34,
-       "age_group": "adult",
-       "country_id": "NG",
-       "country_name": "Nigeria",
-       "country_probability": 0.85,
-       "created_at": "2026-04-01T12:00:00.000Z"
-     }
-  ]
-}
-```
-
-## Setup & Seeding Instructions
-1. Install dependencies: `pnpm install`
-2. Sync the database: `npx prisma db push`
-3. Seed the 2,026 profiles: `npx prisma db seed`
-4. Run locally: `pnpm dev`
+1.  **Install**: `pnpm install`
+2.  **Database**: `npx prisma db push` (Synchronizes schema without reset)
+3.  **Environment**: Create `.env` based on `.env.example`.
+4.  **Dev**: `pnpm dev`
