@@ -11,16 +11,42 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
- 
-model Profile{
-  id  String @id
-  name String @unique
-  gender String
-  gender_probability Float
-  age Int
-  age_group String
-  country_name String
-  country_id String
+
+model Profile {
+  id                  String   @id
+  name                String   @unique
+  gender              String
+  gender_probability  Float
+  age                 Int
+  age_group           String
+  country_name        String
+  country_id          String
   country_probability Float
-  created_at  DateTime @default(now())
+  created_at          DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  ANALYST
+}
+
+model User {
+  id            String         @id @default(uuid())
+  githubId      String         @unique
+  email         String?        @unique
+  name          String?
+  role          Role           @default(ANALYST)
+  refreshTokens RefreshToken[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
