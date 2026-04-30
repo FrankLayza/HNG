@@ -1,0 +1,48 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, feat/stage-one-task]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-build:
+    name: Lint, Build & Test
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+          cache-dependency-path: stage-zero/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: stage-zero
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        working-directory: stage-zero
+        run: npx prisma generate
+
+      - name: Build TypeScript
+        working-directory: stage-zero
+        run: pnpm run build
+
+      - name: Check for lint errors
+        working-directory: stage-zero
+        run: npx tsc --noEmit
