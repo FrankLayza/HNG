@@ -104,8 +104,8 @@ router.get("/github/callback", async (req: Request, res: Response) => {
         Accept: "application/json",
       },
       body: JSON.stringify({
-        client_id: process.env.GITHUB_CLIENT_ID,
-        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        client_id: process.env.GITHUB_CLIENT_ID?.trim(),
+        client_secret: process.env.GITHUB_CLIENT_SECRET?.trim(),
         code,
         redirect_uri: pending.redirect_uri || process.env.GITHUB_REDIRECT_URI,
       }),
@@ -236,8 +236,8 @@ router.post("/github/callback", async (req: Request, res: Response) => {
         Accept: "application/json",
       },
       body: JSON.stringify({
-        client_id: process.env.GITHUB_CLIENT_ID,
-        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        client_id: process.env.GITHUB_CLIENT_ID?.trim(),
+        client_secret: process.env.GITHUB_CLIENT_SECRET?.trim(),
         code,
         code_verifier: code_verifier || undefined,
         redirect_uri: redirect_uri || process.env.GITHUB_REDIRECT_URI,
@@ -438,7 +438,7 @@ router.all("/logout", (req: Request, res: Response) => {
  * @desc    Get GitHub OAuth URL as JSON (kept for backward compat)
  */
 router.get("/github/url", (req: Request, res: Response) => {
-  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientId = process.env.GITHUB_CLIENT_ID?.trim();
   const redirectUri = (req.query.redirect_uri as string) || process.env.GITHUB_REDIRECT_URI;
   const scope = "user:email read:user";
 
