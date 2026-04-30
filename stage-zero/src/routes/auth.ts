@@ -29,7 +29,7 @@ setInterval(() => {
  *   - state           – opaque string (if omitted, server generates one)
  */
 router.get("/github", (req: Request, res: Response) => {
-  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientId = process.env.GITHUB_CLIENT_ID?.trim();
   if (!clientId) {
     return res.status(500).json({ status: "error", message: "GitHub Client ID not configured" });
   }
