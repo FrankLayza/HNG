@@ -460,6 +460,7 @@ router.get("/github/url", (req: Request, res: Response) => {
 
   pendingAuths.set(state, {
     code_challenge: codeChallenge,
+    code_verifier: verifier,
     redirect_uri: redirectUri || "",
     createdAt: Date.now(),
   });
