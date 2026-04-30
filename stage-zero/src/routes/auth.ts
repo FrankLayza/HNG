@@ -6,8 +6,8 @@ import { authenticate, AuthenticatedRequest } from "../middleware/auth.js";
 
 const router: Router = Router();
 
-// ─── In-memory PKCE + state store (maps state → { code_challenge, redirect_uri }) ──
-const pendingAuths = new Map<string, { code_challenge: string; redirect_uri?: string; createdAt: number }>();
+// ─── In-memory PKCE + state store (maps state → { code_challenge, code_verifier?, redirect_uri }) ──
+const pendingAuths = new Map<string, { code_challenge: string; code_verifier?: string; redirect_uri?: string; createdAt: number }>();
 
 // Clean up expired entries every 5 minutes
 setInterval(() => {
@@ -39,16 +39,18 @@ router.get("/github", (req: Request, res: Response) => {
 
   // PKCE: use provided code_challenge or generate one
   let codeChallenge = req.query.code_challenge as string | undefined;
+  let codeVerifier: string | undefined;
   if (!codeChallenge) {
     // Generate a dummy verifier/challenge so the flow always has PKCE
-    const verifier = crypto.randomBytes(32).toString("base64url");
-    codeChallenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+    codeVerifier = crypto.randomBytes(32).toString("base64url");
+    codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
   }
 
   // Store state → challenge mapping for callback validation
   const redirectUri = (req.query.redirect_uri as string) || process.env.GITHUB_REDIRECT_URI || "";
   pendingAuths.set(state, {
     code_challenge: codeChallenge,
+    code_verifier: codeVerifier,
     redirect_uri: redirectUri,
     createdAt: Date.now(),
   });
@@ -107,6 +109,7 @@ router.get("/github/callback", async (req: Request, res: Response) => {
         client_id: process.env.GITHUB_CLIENT_ID?.trim(),
         client_secret: process.env.GITHUB_CLIENT_SECRET?.trim(),
         code,
+        code_verifier: pending.code_verifier || undefined,
         redirect_uri: pending.redirect_uri || process.env.GITHUB_REDIRECT_URI,
       }),
     });
@@ -219,11 +222,16 @@ router.post("/github/callback", async (req: Request, res: Response) => {
     return res.status(400).json({ status: "error", message: "Missing state or code_verifier parameter" });
   }
 
+  let finalVerifier = code_verifier;
+
   // If state was provided, validate it
   if (state) {
     const pending = pendingAuths.get(state);
     if (!pending) {
       return res.status(400).json({ status: "error", message: "Invalid or expired state parameter" });
+    }
+    if (pending.code_verifier) {
+      finalVerifier = pending.code_verifier;
     }
     pendingAuths.delete(state);
   }
@@ -239,7 +247,7 @@ router.post("/github/callback", async (req: Request, res: Response) => {
         client_id: process.env.GITHUB_CLIENT_ID?.trim(),
         client_secret: process.env.GITHUB_CLIENT_SECRET?.trim(),
         code,
-        code_verifier: code_verifier || undefined,
+        code_verifier: finalVerifier || undefined,
         redirect_uri: redirect_uri || process.env.GITHUB_REDIRECT_URI,
       }),
     });
